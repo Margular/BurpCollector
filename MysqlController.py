@@ -42,14 +42,19 @@ class MysqlController():
 
     def loadMysqlConfig(self):
 
-        with open('../config.ini')as config_f:
-            mysql_config = json.load(config_f).get('mysql')
+        with open('../config.ini') as config_f:
+            j = json.load(config_f)
+            mysql_config = j.get('mysql')
+            options = j.get('options')
             
         self._host = mysql_config.get('host')
         self._user = mysql_config.get('user')
         self._password = mysql_config.get('password')
         self._port = int(mysql_config.get('port'))
         self._database = mysql_config.get('database')
+
+        self._path_max_length = int(options.get('pathMaxLength'))
+        self._file_max_length = int(options.get('fileMaxLength'))
 
     def loadMysqlPayload(self):
 
@@ -230,18 +235,18 @@ class MysqlController():
         
         cursor.execute(self._selectTablepath, (host, path))
         itemCount = cursor.fetchone()
-
-        if not itemCount.get('count(*)'):
-            cursor.execute(self._insertTablepath, (host, path))
-        else:
-            cursor.execute(self._updateTablepathCount, (host, path))
+        if len(path) < self._path_max_length:
+            if not itemCount.get('count(*)'):
+                cursor.execute(self._insertTablepath, (host, path))
+            else:
+                cursor.execute(self._updateTablepathCount, (host, path))
 
     def operateTableFile(self, cursor, host, file):
         
         cursor.execute(self._selectTableFile, (host, file))
         itemCount = cursor.fetchone()
-
-        if not itemCount.get('count(*)'):
-            cursor.execute(self._insertTableFile, (host, file))
-        else:
-            cursor.execute(self._updateTableFileCount, (host, file))
+        if len(file) < self._file_max_length:
+            if not itemCount.get('count(*)'):
+                cursor.execute(self._insertTableFile, (host, file))
+            else:
+                cursor.execute(self._updateTableFileCount, (host, file))

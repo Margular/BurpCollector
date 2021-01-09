@@ -13,7 +13,6 @@ import json
 from urlparse import urlparse
 import pymysql
 from MysqlController import MysqlController
-
 from burp import IBurpExtender
 from burp import IExtensionStateListener
 from burp import IContextMenuFactory

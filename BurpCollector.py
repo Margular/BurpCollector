@@ -10,6 +10,8 @@ TEag1e@www.teagle.top
 import time
 import os
 import json
+import math
+import collections
 from urlparse import urlparse
 import pymysql
 from MysqlController import MysqlController
@@ -112,12 +114,27 @@ class DataExtractor():
         self._pathLog = pathLog
         self._fileLog = fileLog
         self._paramLog = paramLog
-        self.coreProcessor()
-    
-    def coreProcessor(self):
-        
+        # self._entropyScore = 4.0
         with open('../config.ini')as config_f:
             self._config = json.load(config_f)
+        # self._path_max_length = int(self._config.get('options').get('pathMaxLength'))
+        # self._param_max_length = int(self._config.get('options').get('paramMaxLength'))
+        # self._file_max_length = int(self._config.get('options').get('fileMaxLength'))
+        self._entropyScore = self._config.get('options').get('entropy')
+        self.coreProcessor()
+
+    def entropy(self,word):
+        if word.isdigit() and len(word)>11:
+            return 9
+        inp_str = word
+        counter_char = collections.Counter(inp_str)
+        entropy = 0
+        for c, ctn in counter_char.items():
+            _p = float(ctn)/len(inp_str)
+            entropy += -1 * _p * math.log(_p, 2)
+        return round(entropy, 7)
+    
+    def coreProcessor(self):
 
         allHistoryMessage = self._callbacks.getProxyHistory()
         
@@ -130,55 +147,64 @@ class DataExtractor():
         for historyMessage in allHistoryMessage:
 
             httpService = historyMessage.getHttpService()
-            requestInfo = self._helpers.analyzeRequest(httpService, historyMessage.getRequest())
+            
+            # invoke host filter
             host = httpService.getHost()
+            if not self.filterHost(host):
+                continue
+
+            requestInfo = self._helpers.analyzeRequest(httpService, historyMessage.getRequest())
             url = str(requestInfo.getUrl())
             path = urlparse(url).path
             path,file = self.formatPathFile(path)
 
-            # invoke host filter
-            if not self.filterHost(host):
-                continue
-
-            # invoke file filter
-            if not self.filterFile(file):
-                continue
-
-            # path to log
-            try:
-                currentPath = '{}\t{}'.format(host, path)
-            except:
-                continue
-            if path and currentPath not in collectionPath:
-                print(currentPath)
-                with open(self._pathLog, 'a')as path_f:
-                    path_f.write(currentPath+'\n')
-                collectionPath.append(currentPath)
 
             # file to log 
-            try:
-                currentFile = '{}\t{}'.format(host, file)
-            except:
-                continue
-            if file and currentFile not in collectionFile:
-                print(currentFile)
-                with open(self._fileLog, 'a')as file_f:
-                    file_f.write(currentFile+'\n')
-                collectionFile.append(currentFile)
+            # invoke file filter
+            if self.filterFile(file):
+                try:
+                    currentFile = '{}\t{}'.format(host, file)
+                except:
+                    pass
+                else:
+                    if file and currentFile not in collectionFile:
+                        # print(currentFile)
+                        with open(self._fileLog, 'a')as file_f:
+                            file_f.write(currentFile+'\n')
+                        collectionFile.append(currentFile)
+
 
             # parameters to log
             paramsObject = requestInfo.getParameters()
             params = self.processParamsObject(paramsObject)
             # UnicodeEncodeError
+
+            # invoke param filter
+            params = self.filterParam(params)
             try:
                 currentParams = '{}\t{}'.format(host, ','.join(params))
             except:
-                continue
-            if params and currentParams not in collectionParam:
-                    print(currentParams)
+                pass
+            else:
+                if params and currentParams not in collectionParam:
                     with open(self._paramLog, 'a')as params_f:
                         params_f.write(currentParams+'\n')
                     collectionParam.append(currentParams)
+
+
+            # path to log
+            # invoke path filter
+            path = self.filterPath(path)
+            try:
+                currentPath = '{}\t{}'.format(host, path)
+            except:
+                pass
+            else:
+                if path and currentPath not in collectionPath:
+                    # print(currentPath)
+                    with open(self._pathLog, 'a')as path_f:
+                        path_f.write(currentPath+'\n')
+                    collectionPath.append(currentPath)
 
     # format path and file
     def formatPathFile(self, path):
@@ -215,19 +241,56 @@ class DataExtractor():
 
     # extractor data from file
     def filterFile(self, file):
+        v = self.entropy(file)
 
         balckPaths = self._config.get('blackExtension')
 
         for blackPath in balckPaths:
-            if file.endswith(blackPath):
+            if file.lower().endswith(blackPath):
                 return False
+        if v > self._entropyScore:
+            print("file: {} entropy is {}, ignore".format(file,v))
+            return False
         return True
+
+    def filterPath(self,path):
+        wordlist = path.split("/")[1:-1]
+        c = 0
+        for w in wordlist:
+            v = self.entropy(w)
+            if v > self._entropyScore:
+                if c == 0:
+                    return
+                else:
+                    newpath = '/' + '/'.join(wordlist[0:c]) + '/'
+                print("path: {} entropy is {}, extract {}".format(path,v,newpath))
+                return newpath
+            c = c + 1
+        return path
+
+    def filterParam(self,params):
+        newparams = []
+        for p in params:
+            e = self.entropy(p)
+            if p == '':
+                continue
+            if e > self._entropyScore:
+                # print(params)
+                try:
+                    print("param: %s entropy is %f, ignore"%(p,e))
+                except:
+                    # print(p,e)
+                    pass
+                continue
+            newparams.append(p)
+        return newparams
+
 
     # extract params
     def processParamsObject(self, paramsObject):
 
         # get parameters
-        params = []
+        params = set()
         for paramObject in paramsObject:
 
             # don't process Cookie's Pamrams
@@ -236,5 +299,5 @@ class DataExtractor():
             param = paramObject.getName()
             if param.startswith('_'):
                 continue
-            params.append(param)
+            params.add(param)
         return params

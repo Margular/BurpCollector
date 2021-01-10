@@ -45,7 +45,7 @@ class MysqlController():
         with open('../config.ini') as config_f:
             j = json.load(config_f)
             mysql_config = j.get('mysql')
-            options = j.get('options')
+            # options = j.get('options')
             
         self._host = mysql_config.get('host')
         self._user = mysql_config.get('user')
@@ -53,8 +53,8 @@ class MysqlController():
         self._port = int(mysql_config.get('port'))
         self._database = mysql_config.get('database')
 
-        self._path_max_length = int(options.get('pathMaxLength'))
-        self._file_max_length = int(options.get('fileMaxLength'))
+        # self._path_max_length = int(options.get('pathMaxLength'))
+        # self._file_max_length = int(options.get('fileMaxLength'))
 
     def loadMysqlPayload(self):
 
@@ -157,22 +157,27 @@ class MysqlController():
     # @return [(host,orther),]
     def getDataFromLog(self, logFile):
 
-        tempData = []
+        tempData = set()
 
         with open(logFile)as log_f:
 
             for line in log_f:
                 line = line.strip()
-                host,orther = line.split('\t')
+                
+                host,orther = line.split('\t',1)
+
+                if orther.strip() == '':
+                    continue
 
                 # The host that is not on the whitelist will be reset to empty
                 for whiteHost in self._whiteHosts:
-                    if not whiteHost or not host.endswith(whiteHost):
-                        host = ''
-                    else:
+                    if host.endswith(whiteHost):
                         host = '*.{}'.format(whiteHost)
+                        break
+                else:
+                    host = ''
 
-                tempData.append((host, orther))
+                tempData.add((host, orther))
 
         return tempData
 
@@ -214,11 +219,15 @@ class MysqlController():
                 connection.commit()
 
             if dataDict.get('param'):
+                paramSet = set()
                 for host,params in dataDict.get('param'):
                     for param in params.split(','):
-                        self.operateTableParam(cursor, host, param)
+                        if param not in paramSet:
+                            paramSet.add(param)
+                            self.operateTableParam(cursor, host, param)
                 connection.commit()
 
+        finally:
             connection.close()
 
     def operateTableParam(self, cursor, host, param):
@@ -235,18 +244,18 @@ class MysqlController():
         
         cursor.execute(self._selectTablepath, (host, path))
         itemCount = cursor.fetchone()
-        if len(path) < self._path_max_length:
-            if not itemCount.get('count(*)'):
-                cursor.execute(self._insertTablepath, (host, path))
-            else:
-                cursor.execute(self._updateTablepathCount, (host, path))
+
+        if not itemCount.get('count(*)'):
+            cursor.execute(self._insertTablepath, (host, path))
+        else:
+            cursor.execute(self._updateTablepathCount, (host, path))
 
     def operateTableFile(self, cursor, host, file):
         
         cursor.execute(self._selectTableFile, (host, file))
         itemCount = cursor.fetchone()
-        if len(file) < self._file_max_length:
-            if not itemCount.get('count(*)'):
-                cursor.execute(self._insertTableFile, (host, file))
-            else:
-                cursor.execute(self._updateTableFileCount, (host, file))
+
+        if not itemCount.get('count(*)'):
+            cursor.execute(self._insertTableFile, (host, file))
+        else:
+            cursor.execute(self._updateTableFileCount, (host, file))

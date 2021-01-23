@@ -154,8 +154,7 @@ class DataExtractor():
                 continue
 
             requestInfo = self._helpers.analyzeRequest(httpService, historyMessage.getRequest())
-            url = str(requestInfo.getUrl())
-            path = urlparse(url).path
+            path = requestInfo.getUrl().getPath()
             path,file = self.formatPathFile(path)
 
 

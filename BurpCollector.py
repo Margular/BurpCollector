@@ -11,6 +11,7 @@ import collections
 import json
 import math
 import os
+import threading
 import time
 
 from burp import IBurpExtender
@@ -19,6 +20,8 @@ from burp import IExtensionStateListener
 from javax.swing import JMenuItem
 
 from MysqlController import MysqlController
+
+__lock__ = threading.Lock()
 
 
 class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory):
@@ -41,6 +44,10 @@ class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory):
 
         # register ourselves as an Extension listener
         callbacks.registerExtensionStateListener(self)
+
+        t = threading.Thread(target=self.collectPeriodically)
+        t.setDaemon(True)
+        t.start()
 
     #
     # create log files with current time
@@ -84,23 +91,34 @@ class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory):
     #
 
     def menuOnClick(self, event):
-        self.collect()
+        self.collectAsync()
 
     #
     # implement IExtensionStateListener
     #
 
     def extensionUnloaded(self):
-        self.collect()
+        self.collectAsync()
+
+    def collectPeriodically(self):
+        while True:
+            self.collect()
+            time.sleep(600)
+
+    def collectAsync(self):
+        t = threading.Thread(target=self.collect)
+        t.setDaemon(True)
+        t.start()
 
     def collect(self):
+        with __lock__:
+            print('[*] collect at ' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
 
-        # extract path,file and param from Proxy History
-        DataExtractor(self._callbacks, self._pathLog, self._fileLog, self._paramLog)
+            # extract path,file and param from Proxy History
+            DataExtractor(self._callbacks, self._pathLog, self._fileLog, self._paramLog)
 
-        # stored in MySQL from the log file
-        MysqlController().coreProcessor(self._pathLog, self._fileLog, self._paramLog)
-
+            # stored in MySQL from the log file
+            MysqlController().coreProcessor(self._pathLog, self._fileLog, self._paramLog)
 
 #
 # extract path,file and param from Proxy History 
@@ -246,7 +264,7 @@ class DataExtractor():
             if file.lower().endswith(blackPath):
                 return False
         if v > self._entropyScore:
-            print("file: {} entropy is {}, ignore".format(file, v))
+            # print("file: {} entropy is {}, ignore".format(file, v))
             return False
         return True
 
@@ -260,7 +278,7 @@ class DataExtractor():
                     return
                 else:
                     newpath = '/' + '/'.join(wordlist[0:c]) + '/'
-                print("path: {} entropy is {}, extract {}".format(path, v, newpath))
+                # print("path: {} entropy is {}, extract {}".format(path, v, newpath))
                 return newpath
             c = c + 1
         return path
@@ -274,7 +292,8 @@ class DataExtractor():
             if e > self._entropyScore:
                 # print(params)
                 try:
-                    print("param: %s entropy is %f, ignore" % (p, e))
+                    # print("param: %s entropy is %f, ignore" % (p, e))
+                    pass
                 except:
                     # print(p,e)
                     pass

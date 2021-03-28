@@ -84,17 +84,18 @@ class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory):
     #
 
     def menuOnClick(self, event):
-
-        # extract path,file and param from Proxy History 
-        DataExtractor(self._callbacks, self._pathLog, self._fileLog, self._paramLog)
+        self.collect()
 
     #
     # implement IExtensionStateListener
     #
 
     def extensionUnloaded(self):
+        self.collect()
 
-        # extract path,file and param from Proxy History 
+    def collect(self):
+
+        # extract path,file and param from Proxy History
         DataExtractor(self._callbacks, self._pathLog, self._fileLog, self._paramLog)
 
         # stored in MySQL from the log file

@@ -1,9 +1,10 @@
 import json
 import warnings
+
 import pymysql
 
-
 warnings.filterwarnings("ignore")
+
 
 class MysqlController():
 
@@ -14,7 +15,7 @@ class MysqlController():
 
     # log file to Mysql
     def coreProcessor(self, pathLog, fileLog, paramLog):
-        
+
         self._pathLog = pathLog
         self._fileLog = fileLog
         self._paramLog = paramLog
@@ -34,9 +35,9 @@ class MysqlController():
                 ('host','param')]}
         '''
         dataDict = {
-            'path':self.getDataFromLog(self._pathLog),
-            'file':self.getDataFromLog(self._fileLog),
-            'param':self.getDataFromLog(self._paramLog)}
+            'path': self.getDataFromLog(self._pathLog),
+            'file': self.getDataFromLog(self._fileLog),
+            'param': self.getDataFromLog(self._paramLog)}
 
         self.dataStorage(dataDict)
 
@@ -46,7 +47,7 @@ class MysqlController():
             j = json.load(config_f)
             mysql_config = j.get('mysql')
             # options = j.get('options')
-            
+
         self._host = mysql_config.get('host')
         self._user = mysql_config.get('user')
         self._password = mysql_config.get('password')
@@ -125,13 +126,13 @@ class MysqlController():
 
         try:
             connection = pymysql.connect(host=self._host,
-                user=self._user,
-                password=self._password,
-                port=self._port,
-                cursorclass=pymysql.cursors.DictCursor)
-            print('\n'+'='*10)
+                                         user=self._user,
+                                         password=self._password,
+                                         port=self._port,
+                                         cursorclass=pymysql.cursors.DictCursor)
+            print('\n' + '=' * 10)
             print('MySQL Connection Succession')
-            print('='*10+'\n')
+            print('=' * 10 + '\n')
 
         except Exception as e:
 
@@ -163,8 +164,8 @@ class MysqlController():
 
             for line in log_f:
                 line = line.strip()
-                
-                host,orther = line.split('\t',1)
+
+                host, orther = line.split('\t', 1)
 
                 if orther.strip() == '':
                     continue
@@ -190,20 +191,22 @@ class MysqlController():
         'param':[
             ('host','param')]}
     '''
+
     def dataStorage(self, dataDict):
+
+        connection = None
 
         try:
             connection = pymysql.connect(host=self._host,
-                user=self._user,
-                password=self._password,
-                port=self._port,
-                db=self._database,
-                cursorclass=pymysql.cursors.DictCursor)
+                                         user=self._user,
+                                         password=self._password,
+                                         port=self._port,
+                                         db=self._database,
+                                         cursorclass=pymysql.cursors.DictCursor)
 
         except Exception as e:
+            print(__import__('traceback').format_exc())
 
-            if e[0] == 1045:
-                print('MySQL Access denied !!')                
         else:
 
             cursor = connection.cursor()
@@ -220,7 +223,7 @@ class MysqlController():
 
             if dataDict.get('param'):
                 paramSet = set()
-                for host,params in dataDict.get('param'):
+                for host, params in dataDict.get('param'):
                     for param in params.split(','):
                         if param not in paramSet:
                             paramSet.add(param)
@@ -231,7 +234,7 @@ class MysqlController():
             connection.close()
 
     def operateTableParam(self, cursor, host, param):
-        
+
         cursor.execute(self._selectTableParam, (host, param))
         itemCount = cursor.fetchone()
 
@@ -241,7 +244,7 @@ class MysqlController():
             cursor.execute(self._updateTableParamCount, (host, param))
 
     def operateTablepath(self, cursor, host, path):
-        
+
         cursor.execute(self._selectTablepath, (host, path))
         itemCount = cursor.fetchone()
 
@@ -251,7 +254,7 @@ class MysqlController():
             cursor.execute(self._updateTablepathCount, (host, path))
 
     def operateTableFile(self, cursor, host, file):
-        
+
         cursor.execute(self._selectTableFile, (host, file))
         itemCount = cursor.fetchone()
 

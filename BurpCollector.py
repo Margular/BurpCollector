@@ -1,25 +1,24 @@
 #!coding:utf-8
 
-'''
+"""
 ======
 TEag1e@www.teagle.top
 米斯特安全团队@www.hi-ourlife.com
 ======
-'''
+"""
 
-import time
-import os
+import collections
 import json
 import math
-import collections
-from urlparse import urlparse
-import pymysql
-from MysqlController import MysqlController
-from burp import IBurpExtender
-from burp import IExtensionStateListener
-from burp import IContextMenuFactory
+import os
+import time
 
+from burp import IBurpExtender
+from burp import IContextMenuFactory
+from burp import IExtensionStateListener
 from javax.swing import JMenuItem
+
+from MysqlController import MysqlController
 
 
 class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory):
@@ -50,7 +49,7 @@ class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory):
     def createLogFile(self):
 
         # currentTime = Year Month Day Hour Minute
-        currentTime = time.strftime('%Y%m%d%H%M%S',time.localtime())
+        currentTime = time.strftime('%Y%m%d%H%M%S', time.localtime())
 
         # make directory
         if not os.path.exists('log'):
@@ -64,20 +63,20 @@ class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory):
         self._pathLog = '{}path.log'.format(currentTime)
 
         if not os.path.exists(self._paramLog):
-            open(self._paramLog,'w').close()
+            open(self._paramLog, 'w').close()
         if not os.path.exists(self._fileLog):
-            open(self._fileLog,'w').close()
+            open(self._fileLog, 'w').close()
         if not os.path.exists(self._pathLog):
-            open(self._pathLog,'w').close()
+            open(self._pathLog, 'w').close()
 
     #
     # implement IContextMenuFactory
     #
 
-    def createMenuItems(self, invocation): 
+    def createMenuItems(self, invocation):
 
         mainMenu = JMenuItem('History To Log',
-            actionPerformed = self.menuOnClick)
+                             actionPerformed=self.menuOnClick)
         return [mainMenu]
 
     #
@@ -101,6 +100,7 @@ class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory):
         # stored in MySQL from the log file
         MysqlController().coreProcessor(self._pathLog, self._fileLog, self._paramLog)
 
+
 #
 # extract path,file and param from Proxy History 
 #
@@ -123,21 +123,21 @@ class DataExtractor():
         self._entropyScore = self._config.get('options').get('entropy')
         self.coreProcessor()
 
-    def entropy(self,word):
-        if word.isdigit() and len(word)>11:
+    def entropy(self, word):
+        if word.isdigit() and len(word) > 11:
             return 9
         inp_str = word
         counter_char = collections.Counter(inp_str)
         entropy = 0
         for c, ctn in counter_char.items():
-            _p = float(ctn)/len(inp_str)
+            _p = float(ctn) / len(inp_str)
             entropy += -1 * _p * math.log(_p, 2)
         return round(entropy, 7)
-    
+
     def coreProcessor(self):
 
         allHistoryMessage = self._callbacks.getProxyHistory()
-        
+
         # define three variable to remove duplicate data
         collectionParam = []
         collectionFile = []
@@ -147,7 +147,7 @@ class DataExtractor():
         for historyMessage in allHistoryMessage:
 
             httpService = historyMessage.getHttpService()
-            
+
             # invoke host filter
             host = httpService.getHost()
             if not self.filterHost(host):
@@ -155,10 +155,9 @@ class DataExtractor():
 
             requestInfo = self._helpers.analyzeRequest(httpService, historyMessage.getRequest())
             path = requestInfo.getUrl().getPath()
-            path,file = self.formatPathFile(path)
+            path, file = self.formatPathFile(path)
 
-
-            # file to log 
+            # file to log
             # invoke file filter
             if self.filterFile(file):
                 try:
@@ -169,9 +168,8 @@ class DataExtractor():
                     if file and currentFile not in collectionFile:
                         # print(currentFile)
                         with open(self._fileLog, 'a')as file_f:
-                            file_f.write(currentFile+'\n')
+                            file_f.write(currentFile + '\n')
                         collectionFile.append(currentFile)
-
 
             # parameters to log
             paramsObject = requestInfo.getParameters()
@@ -187,9 +185,8 @@ class DataExtractor():
             else:
                 if params and currentParams not in collectionParam:
                     with open(self._paramLog, 'a')as params_f:
-                        params_f.write(currentParams+'\n')
+                        params_f.write(currentParams + '\n')
                     collectionParam.append(currentParams)
-
 
             # path to log
             # invoke path filter
@@ -202,7 +199,7 @@ class DataExtractor():
                 if path and currentPath not in collectionPath:
                     # print(currentPath)
                     with open(self._pathLog, 'a')as path_f:
-                        path_f.write(currentPath+'\n')
+                        path_f.write(currentPath + '\n')
                     collectionPath.append(currentPath)
 
     # format path and file
@@ -222,10 +219,10 @@ class DataExtractor():
         # path = /x/
         # file = index.php
         else:
-            file = path[sepIndex+1:]
-            path = path[:sepIndex+1]
+            file = path[sepIndex + 1:]
+            path = path[:sepIndex + 1]
 
-        return path,file
+        return path, file
 
     # extractor data from host
     def filterHost(self, host):
@@ -248,11 +245,11 @@ class DataExtractor():
             if file.lower().endswith(blackPath):
                 return False
         if v > self._entropyScore:
-            print("file: {} entropy is {}, ignore".format(file,v))
+            print("file: {} entropy is {}, ignore".format(file, v))
             return False
         return True
 
-    def filterPath(self,path):
+    def filterPath(self, path):
         wordlist = path.split("/")[1:-1]
         c = 0
         for w in wordlist:
@@ -262,12 +259,12 @@ class DataExtractor():
                     return
                 else:
                     newpath = '/' + '/'.join(wordlist[0:c]) + '/'
-                print("path: {} entropy is {}, extract {}".format(path,v,newpath))
+                print("path: {} entropy is {}, extract {}".format(path, v, newpath))
                 return newpath
             c = c + 1
         return path
 
-    def filterParam(self,params):
+    def filterParam(self, params):
         newparams = []
         for p in params:
             e = self.entropy(p)
@@ -276,14 +273,13 @@ class DataExtractor():
             if e > self._entropyScore:
                 # print(params)
                 try:
-                    print("param: %s entropy is %f, ignore"%(p,e))
+                    print("param: %s entropy is %f, ignore" % (p, e))
                 except:
                     # print(p,e)
                     pass
                 continue
             newparams.append(p)
         return newparams
-
 
     # extract params
     def processParamsObject(self, paramsObject):
